@@ -326,52 +326,6 @@ SynthDef("dirt_distortion" ++ ~dirt.numChannels, { |out, distdrive = 0.5, distto
 	ReplaceOut.ar(out, LeakDC.ar(sig));
 }, [\ir, \ir]).add;
 
-// Analog Vintage Distortion
-~dirt.addModule('analogDistortion', { |dirtEvent|
-	dirtEvent.sendSynth("dirt_analogDistortion" ++ ~dirt.numChannels,
-		[
-			adistgain: ~adistgain,
-			adisttone: ~adisttone,
-			out: ~out
-		]
-	)
-	}, { ~adistgain.notNil });
-
-SynthDef("dirt_analogDistortion" ++ ~dirt.numChannels, { |out, adistgain = 0.5, adisttone = 0.5 |
-	var sig, freq, filterType;
-
-	sig = In.ar(out, ~dirt.numChannels);
-
-    // First we feed into a HPF to filter out sub-20Hz
-    sig = HPF.ar(sig, 25);
-    // Then we feed into the distortion
-    // Drive controls 1 to 5x the volume with hard-clipping
-
-	sig = AnalogVintageDistortion.ar(sig, drivegain: adistgain, bias: 0, lowgain: 0.6, highgain: 0.1, shelvingfreq: 600, oversample:0);
-
-    // Then we feed into the Tone section
-    // Tone controls a MMF, exponentially ranging from 10 Hz - 21 kHz
-    // Tone above 0.75 switches to a HPF
-    freq = Select.kr(adisttone > 0.75, [
-      Select.kr(adisttone > 0.2, [
-        LinExp.kr(adisttone, 0, 0.2, 10, 400),
-        LinExp.kr(adisttone, 0.2, 0.75, 400, 20000),
-      ]),
-      LinExp.kr(adisttone, 0.75, 1, 20, 21000),
-    ]);
-    filterType = Select.kr(adisttone > 0.75, [0, 1]);
-    sig = DFM1.ar(
-      sig,
-      freq,
-      \res.kr(0.1),
-      1.0,
-      filterType,
-      \noise.kr(0.0003)
-    ).softclip;
-
-	ReplaceOut.ar(out, LeakDC.ar(sig));
-}, [\ir, \ir]).add;
-
 
 // Overdrive
 ~dirt.addModule('overdrive', { |dirtEvent|
@@ -561,6 +515,4 @@ SynthDef("dirt_ampsimulation" ++ ~dirt.numChannels, { |out, ampdrive = 0.5, ampr
 // Original module order
 //~dirt.orderModules(['sound', 'vowel', 'shape', 'hpf', 'bpf', 'crush', 'coarse', 'lpf', 'pshift', 'envelope', 'grenvelo', 'tremolo', 'phaser', 'waveloss', 'squiz', 'fshift', 'triode','krush', 'octer', 'ring', 'distort', 'spectral-delay', 'spectral-freeze', 'spectral-comb', 'spectral-smear', 'spectral-scram', 'spectral-binshift', 'spectral-hbrick', 'spectral-lbrick', 'spectral-conformer', 'spectral-enhance', 'dj-filter', 'out_to', 'map_from', 'chorus', 'flanger', 'autowah', 'phaser2', 'vibrato', 'wavefolder', 'distortion', 'overdrive', 'lofi', 'ampsimulation']);
 
-~dirt.orderModules(['sound', 'autowah', 'vowel', 'shape', 'hpf', 'bpf', 'crush', 'coarse', 'lpf', 'pshift', 'envelope', 'grenvelo', 'tremolo', 'vibrato', 'phaser', 'phaser2', 'waveloss', 'wavefolder', 'squiz', 'fshift', 'triode','krush', 'octer', 'ring', 'analogDistortion', 'distort', 'distortion', 'overdrive', 'ampsimulation', 'chorus', 'flanger', 'spectral-delay', 'spectral-freeze', 'spectral-comb', 'spectral-smear', 'spectral-scram', 'spectral-binshift', 'spectral-hbrick', 'spectral-lbrick', 'spectral-conformer', 'spectral-enhance', 'dj-filter', 'lofi', 'out_to', 'map_from']);
-
-3.linlin(0,1,1.5,3.5)
+~dirt.orderModules(['sound', 'autowah', 'vowel', 'shape', 'hpf', 'bpf', 'crush', 'coarse', 'lpf', 'pshift', 'envelope', 'grenvelo', 'tremolo', 'vibrato', 'phaser', 'phaser2', 'waveloss', 'wavefolder', 'squiz', 'fshift', 'triode','krush', 'octer', 'ring', 'distort', 'distortion', 'overdrive', 'ampsimulation', 'chorus', 'flanger', 'spectral-delay', 'spectral-freeze', 'spectral-comb', 'spectral-smear', 'spectral-scram', 'spectral-binshift', 'spectral-hbrick', 'spectral-lbrick', 'spectral-conformer', 'spectral-enhance', 'dj-filter', 'lofi', 'out_to', 'map_from']);
