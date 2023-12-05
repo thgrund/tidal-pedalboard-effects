@@ -57,4 +57,6 @@ let wahdepth = pF "wahdepth"
     ampmid = pF "ampmid"
     amptreble = pF "amptreble"
     amppresence = pF "ampresence"
+    adistgain = pF "adistgain"
+    adisttone = pF "adisttone"
 

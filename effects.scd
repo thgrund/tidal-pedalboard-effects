@@ -1,3 +1,6 @@
+(
+{
+	var numChannels = ~dirt.numChannels;
 /*
 ## SuperDirt Effects
 
@@ -44,22 +47,52 @@ res = rs
 
 */
 
+/*
+var numChannels = ~dirt.numChannels;
+// Custom orbit routing
+~dirt.addModule('dirt_out_routing',
+         { |dirtEvent|
+
+                 dirtEvent.sendSynth("dirt_out_routing" ++ ~numChannels,
+                         [
+				                 out: ~out,
+				                 to: ~toOut,
+				                 amp: ~globalAmp ? 0.4,
+				                 fadeInTime: ~fadeInTime,
+				                 sustain: ~sustain,
+				                 fadeTime: ~fadeTime
+
+			]
+                 )
+ }, { ~toOut.notNil});
+
+SynthDef("dirt_out_routing" ++ numChannels, { |out, to = 0, amp = 0.4, fadeInTime, sustain, fadeTime|
+	var signal = In.ar(out, numChannels);
+	var env = EnvGen.ar(Env([0, 1, 1, 0], [fadeInTime, sustain, fadeTime], \sin));
+
+	Out.ar(to, signal * env * amp );
+	ReplaceOut.ar(out, signal)
+
+}, [\ir, \ir]).add;*/
+
 // Chorus
 ~dirt.addModule('chorus', { |dirtEvent|
-	dirtEvent.sendSynth("dirt_chorus" ++ ~dirt.numChannels,
+	dirtEvent.sendSynth("dirt_chorus" ++ numChannels,
 		[
 			chorusdepth: ~chorusdepth,
      		chorusrate: ~chorusrate,
+			pan: ~pan,
 			out: ~out
 		]
 	)
 }, { ~chorusdepth.notNil && ~chorusrate.notNil });
 
-SynthDef("dirt_chorus" ++ ~dirt.numChannels, { |out, chorusdepth = 0.5, chorusrate = 0.5|
+SynthDef("dirt_chorus" ++ numChannels, { |out, chorusdepth = 0.5, chorusrate = 0.5, pan = 0.5, gate = 1|
 	var sig;
     var numDelays = 4, lfos, maxDelayTime, minDelayTime;
+	var env = EnvGen.kr(Env.asr, gate);
 
-	sig = In.ar(out, ~dirt.numChannels);
+	sig = In.ar(out, numChannels);
 
 	// Adapted from @madskjeldgaard's Sleet
     chorusrate = Select.kr(chorusrate > 0.5, [
@@ -77,12 +110,11 @@ SynthDef("dirt_chorus" ++ ~dirt.numChannels, { |out, chorusdepth = 0.5, chorusra
         (maxDelayTime + minDelayTime) * 0.5,
       )
     });
-
-	ReplaceOut.ar(out, LeakDC.ar(DelayC.ar(sig, (maxDelayTime * 2), lfos).sum));
+	ReplaceOut.ar(out, LeakDC.ar(DirtPan.ar(DelayC.ar(sig, (maxDelayTime * 2), [lfos, lfos]).sum, numChannels, pan, env)));
 }, [\ir, \ir]).add;
 
 // Flanger
-~dirt.addModule('flanger', { |dirtEvent|
+/*~dirt.addModule('flanger', { |dirtEvent|
 	dirtEvent.sendSynth("dirt_flanger" ++ ~dirt.numChannels,
 		[
 			flangerrate: ~flangerrate,
@@ -116,60 +148,7 @@ SynthDef("dirt_flanger" ++ ~dirt.numChannels, { |out, flangerrate = 0.5, flanger
     LocalOut.ar(delayedSignal + sig);
 
 	ReplaceOut.ar(out, LeakDC.ar(sig + delayedSignal));
-}, [\ir, \ir, \ir, \ir]).add;
-
-
-// Auto Wah
-~dirt.addModule('autowah', { |dirtEvent|
-	dirtEvent.sendSynth("dirt_autowah" ++ ~dirt.numChannels,
-		[
-			wahrate: ~wahrate,
-     		wahdepth: ~wahdepth,
-			wahsensitivity: ~wahsensitivity,
-			wahmode: ~wahmode,
-			wahres: ~wahres,
-			out: ~out
-		]
-	)
-	}, { ~wahrate.notNil || ~wahdepth.notNil });
-
-
-SynthDef("dirt_autowah" ++ ~dirt.numChannels, { |out, wahrate = 0.9, wahdepth = 0.5, wahsensitivity = 0.5, wahmode = 0.5, wahres = 0.5|
-
-	var sig, numChannels, maxDelay, feedbackSignal, lfo, delayedSignal;
-	var sensitivityMultiplier, envelopeFollower, depth, res, rq, bpMultiplier, formantRatio, minCutoffFreq1, maxCutoffFreq1, cutoffFreq1, minCutoffFreq2, maxCutoffFreq2, cutoffFreq2;
-
-	sig = In.ar(out, ~dirt.numChannels);
-
-    sensitivityMultiplier = LinLin.kr(wahsensitivity, 0, 1, 3, 9);
-
-    envelopeFollower = Lag.ar(EnvFollow.ar(
-      (sig * sensitivityMultiplier).clip(-1, 1), 0.999
-    ),
-    // 0.1225
-	wahrate.linexp(0, 1, 0.4, 0.0375));
-
-	// 194
-    minCutoffFreq1 = wahdepth.linexp(0, 1, 440, 85);
-    // 1386
-    maxCutoffFreq1 = wahdepth.linexp(0, 1, 1100, 1750);
-    cutoffFreq1 = envelopeFollower.linexp(0, 1, minCutoffFreq1, maxCutoffFreq1);
-    // 1140
-    minCutoffFreq2 = wahdepth.linexp(0, 1, 1450, 900);
-    // 2445
-    maxCutoffFreq2 = wahdepth.linexp(0, 1, 2175, 2750);
-    cutoffFreq2 = envelopeFollower.linexp(0, 1, minCutoffFreq2, maxCutoffFreq2);
-    rq = wahres.linexp(0, 1, 0.325, 0.01925);
-    bpMultiplier = LinLin.kr(wahres, 0, 1, 2.5, 7.5);
-    formantRatio = 0.75;
-    sig = Select.ar(wahmode, [
-      (RLPF.ar(sig, cutoffFreq1, rq, formantRatio) + RLPF.ar(sig, cutoffFreq2, rq, (1-formantRatio))) * 0.67,
-      ((BPF.ar(sig, cutoffFreq1, rq * 2, formantRatio) + BPF.ar(sig, cutoffFreq2, rq * 2, (1-formantRatio))) * bpMultiplier).softclip,
-      (RHPF.ar(sig, cutoffFreq1, rq, formantRatio) + RHPF.ar(sig, cutoffFreq2, rq, (1-formantRatio))) * 0.75,
-    ]);
-
-	ReplaceOut.ar(out, LeakDC.ar(sig));
-}, [\ir, \ir, \ir, \ir, \ir]).add;
+}, [\ir, \ir, \ir, \ir]).add;*/
 
 
 // Pedal Phaser
@@ -314,6 +293,52 @@ SynthDef("dirt_distortion" ++ ~dirt.numChannels, { |out, distdrive = 0.5, distto
       LinExp.kr(disttone, 0.75, 1, 20, 21000),
     ]);
     filterType = Select.kr(disttone > 0.75, [0, 1]);
+    sig = DFM1.ar(
+      sig,
+      freq,
+      \res.kr(0.1),
+      1.0,
+      filterType,
+      \noise.kr(0.0003)
+    ).softclip;
+
+	ReplaceOut.ar(out, LeakDC.ar(sig));
+}, [\ir, \ir]).add;
+
+// Analog Vintage Distortion
+~dirt.addModule('analogDistortion', { |dirtEvent|
+	dirtEvent.sendSynth("dirt_analogDistortion" ++ ~dirt.numChannels,
+		[
+			adistgain: ~adistgain,
+			adisttone: ~adisttone,
+			out: ~out
+		]
+	)
+	}, { ~adistgain.notNil });
+
+SynthDef("dirt_analogDistortion" ++ ~dirt.numChannels, { |out, adistgain = 0.5, adisttone = 0.5 |
+	var sig, freq, filterType;
+
+	sig = In.ar(out, ~dirt.numChannels);
+
+    // First we feed into a HPF to filter out sub-20Hz
+    sig = HPF.ar(sig, 25);
+    // Then we feed into the distortion
+    // Drive controls 1 to 5x the volume with hard-clipping
+
+	sig = AnalogVintageDistortion.ar(sig, drivegain: adistgain, bias: 0, lowgain: 0.6, highgain: 0.1, shelvingfreq: 600, oversample:0);
+
+    // Then we feed into the Tone section
+    // Tone controls a MMF, exponentially ranging from 10 Hz - 21 kHz
+    // Tone above 0.75 switches to a HPF
+    freq = Select.kr(adisttone > 0.75, [
+      Select.kr(adisttone > 0.2, [
+        LinExp.kr(adisttone, 0, 0.2, 10, 400),
+        LinExp.kr(adisttone, 0.2, 0.75, 400, 20000),
+      ]),
+      LinExp.kr(adisttone, 0.75, 1, 20, 21000),
+    ]);
+    filterType = Select.kr(adisttone > 0.75, [0, 1]);
     sig = DFM1.ar(
       sig,
       freq,
@@ -511,8 +536,98 @@ SynthDef("dirt_ampsimulation" ++ ~dirt.numChannels, { |out, ampdrive = 0.5, ampr
 	ReplaceOut.ar(out, LeakDC.ar(sig));
 }, [\ir, \ir, \ir, \ir, \ir, \ir]).add;
 
+// Auto Wah
+~dirt.addModule('autowah', { |dirtEvent|
+	dirtEvent.sendSynth("dirt_autowah" ++ ~dirt.numChannels,
+		[
+			wahrate: ~wahrate,
+     		wahdepth: ~wahdepth,
+			wahsensitivity: ~wahsensitivity,
+			wahmode: ~wahmode,
+			wahres: ~wahres,
+			out: ~out
+		]
+	)
+	}, { ~wahrate.notNil || ~wahdepth.notNil });
+
+
+SynthDef("dirt_autowah" ++ ~dirt.numChannels, { |out, wahrate = 0.9, wahdepth = 0.5, wahsensitivity = 0.5, wahmode = 0.5, wahres = 0.5|
+
+	var sig, numChannels, maxDelay, feedbackSignal, lfo, delayedSignal;
+	var sensitivityMultiplier, envelopeFollower, depth, res, rq, bpMultiplier, formantRatio, minCutoffFreq1, maxCutoffFreq1, cutoffFreq1, minCutoffFreq2, maxCutoffFreq2, cutoffFreq2;
+
+	sig = In.ar(out, ~dirt.numChannels);
+
+    sensitivityMultiplier = LinLin.kr(wahsensitivity, 0, 1, 3, 9);
+
+    envelopeFollower = Lag.ar(EnvFollow.ar(
+      (sig * sensitivityMultiplier).clip(-1, 1), 0.999
+    ),
+    // 0.1225
+	wahrate.linexp(0, 1, 0.4, 0.0375));
+
+	// 194
+    minCutoffFreq1 = wahdepth.linexp(0, 1, 440, 85);
+    // 1386
+    maxCutoffFreq1 = wahdepth.linexp(0, 1, 1100, 1750);
+    cutoffFreq1 = envelopeFollower.linexp(0, 1, minCutoffFreq1, maxCutoffFreq1);
+    // 1140
+    minCutoffFreq2 = wahdepth.linexp(0, 1, 1450, 900);
+    // 2445
+    maxCutoffFreq2 = wahdepth.linexp(0, 1, 2175, 2750);
+    cutoffFreq2 = envelopeFollower.linexp(0, 1, minCutoffFreq2, maxCutoffFreq2);
+    rq = wahres.linexp(0, 1, 0.325, 0.01925);
+    bpMultiplier = LinLin.kr(wahres, 0, 1, 2.5, 7.5);
+    formantRatio = 0.75;
+    sig = Select.ar(wahmode, [
+      (RLPF.ar(sig, cutoffFreq1, rq, formantRatio) + RLPF.ar(sig, cutoffFreq2, rq, (1-formantRatio))) * 0.67,
+      ((BPF.ar(sig, cutoffFreq1, rq * 2, formantRatio) + BPF.ar(sig, cutoffFreq2, rq * 2, (1-formantRatio))) * bpMultiplier).softclip,
+      (RHPF.ar(sig, cutoffFreq1, rq, formantRatio) + RHPF.ar(sig, cutoffFreq2, rq, (1-formantRatio))) * 0.75,
+    ]);
+
+	ReplaceOut.ar(out, LeakDC.ar(sig));
+}, [\ir, \ir, \ir, \ir, \ir]).add;
 
 // Original module order
 //~dirt.orderModules(['sound', 'vowel', 'shape', 'hpf', 'bpf', 'crush', 'coarse', 'lpf', 'pshift', 'envelope', 'grenvelo', 'tremolo', 'phaser', 'waveloss', 'squiz', 'fshift', 'triode','krush', 'octer', 'ring', 'distort', 'spectral-delay', 'spectral-freeze', 'spectral-comb', 'spectral-smear', 'spectral-scram', 'spectral-binshift', 'spectral-hbrick', 'spectral-lbrick', 'spectral-conformer', 'spectral-enhance', 'dj-filter', 'out_to', 'map_from', 'chorus', 'flanger', 'autowah', 'phaser2', 'vibrato', 'wavefolder', 'distortion', 'overdrive', 'lofi', 'ampsimulation']);
 
-~dirt.orderModules(['sound', 'autowah', 'vowel', 'shape', 'hpf', 'bpf', 'crush', 'coarse', 'lpf', 'pshift', 'envelope', 'grenvelo', 'tremolo', 'vibrato', 'phaser', 'phaser2', 'waveloss', 'wavefolder', 'squiz', 'fshift', 'triode','krush', 'octer', 'ring', 'distort', 'distortion', 'overdrive', 'ampsimulation', 'chorus', 'flanger', 'spectral-delay', 'spectral-freeze', 'spectral-comb', 'spectral-smear', 'spectral-scram', 'spectral-binshift', 'spectral-hbrick', 'spectral-lbrick', 'spectral-conformer', 'spectral-enhance', 'dj-filter', 'lofi', 'out_to', 'map_from']);
+~dirt.orderModules(['sound', 'autowah', 'vowel', 'shape', 'hpf', 'bpf', 'crush', 'coarse', 'lpf', 'pshift', 'envelope', 'grenvelo', 'tremolo', 'vibrato', 'phaser', 'phaser2', 'waveloss', 'wavefolder', 'squiz', 'fshift', 'triode','krush', 'octer', 'ring', 'analogDistortion', 'distort', 'distortion', 'overdrive', 'ampsimulation', 'chorus', 'flanger', 'spectral-delay', 'spectral-freeze', 'spectral-comb', 'spectral-smear', 'spectral-scram', 'spectral-binshift', 'spectral-hbrick', 'spectral-lbrick', 'spectral-conformer', 'spectral-enhance', 'dj-filter', 'lofi', 'out_to', 'map_from', 'dirt_out_routing']);
+
+// Flanger Global
+/*SynthDef("dirt_global_flanger" ++ ~dirt.numChannels, { |dryBus, effectBus, gate = 1, flangerrate = 0.5, flangerdepth = 0.5, flangerfeedback = 0.5, flangerpredelay = 0.5, dry = 0|
+	    var numChannels = ~dirt.numChannels;
+		var maxDelay, feedbackSignal, lfo, delayedSignal, snd;
+
+		var input = In.ar(dryBus, numChannels).asArray.sum;
+
+	    maxDelay = 0.0105;
+		flangerrate = flangerrate.linexp(0, 1, 0.1, 8);
+	flangerdepth = (0.9).linexp(0, 1, 0.00025, maxDelay * 0.45);
+		flangerpredelay = LinLin.kr(flangerpredelay, 0, 1, flangerdepth, maxDelay - flangerdepth);
+
+		// Allow just-beyond-unity feedback
+		flangerfeedback = LinLin.kr(flangerfeedback, 0, 1, 0.0, 1.1);
+
+		feedbackSignal = LocalIn.ar(2);
+		feedbackSignal = Select.ar(flangerfeedback >= 1, [
+			(feedbackSignal * flangerfeedback),
+			(feedbackSignal * flangerfeedback).softclip
+		]);
+
+		lfo = LFPar.kr(flangerrate, 0, flangerdepth, flangerpredelay);
+		delayedSignal = DelayC.ar(input + feedbackSignal, maxDelay, lfo);
+
+		LocalOut.ar(delayedSignal);
+
+		snd = delayedSignal;
+		snd = snd * (1 - dry).lag(LFNoise1.kr(1).range(0.01, 0.02));
+
+		DirtPause.ar(snd, graceTime:4);
+
+		Out.ar(effectBus, snd)
+	}, [\ir, \ir, \ir, \ir]).add;
+
+*/
+
+}.value
+);
