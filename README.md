@@ -4,3 +4,7 @@ Add this to you startup SuperCollider file after initialize SuperDirt and after 
 ```
 (dirt:~dirt).use{ "/path/to/SuperDirtPedalEffects/effects.scd".load };
 ```
+
+Install the SmoothClip folder as a Quark in SuperCollider.
+
+Install the PortedPlugins from https://github.com/madskjeldgaard/portedplugins
